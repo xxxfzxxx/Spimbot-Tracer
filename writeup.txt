@@ -1,0 +1,45 @@
+---------------------------------
+This is an ASCII art for teamname
+---------------------------------
+  _______                      
+ |__   __|                     
+    | |_ __ __ _  ___ ___ _ __ 
+    | | '__/ _` |/ __/ _ \ '__|
+    | | | | (_| | (_|  __/ |   
+    |_|_|  \__,_|\___\___|_|   
+                               
+
+------------
+The Namesake
+------------
+
+Our spimbot is named Tracer, namely it can trace the setpoint on the map and move to a target.
+
+--------------------------
+Strategies and Optimizaion
+--------------------------
+  Kernal Detection:
+        Tracer can spirally dectect the kernal from near to far in 8x8 grid.
+        Originally, we dectect the target using row traversal, 
+        which will potentially cause Trace to move to a futher targert instead of the nearest one.
+  
+  Basic Movement：
+        In the very first few cycle, we hard code the Tracer to make it enter the central part of the ear map
+        where it has less chance to bonk on wall. Then Tracer find targets using its spiral dectection.
+  
+  Bonking:
+        Tracer will never bonk a wall. Tracer can track the setpoints on the map.
+        Mostly, setpoints are inside the "corridors" and some speical space where Tracer are likely to bonk on wall.
+        So setpoints are the grids where Tracer can advance or withdraw.
+
+  Move to a Target:
+        Usually, when there is no barracide between Tracer and the nearest targert, it can move directly to the target.
+        However, in some cases, there is a wall between. We can let it bonk the wall and wait for the next nearest target occurs.
+        But it leads to a random, unperdictable result. And this cycle penalty is much more than find a solution. 
+
+
+
+
+
+
+                                          
