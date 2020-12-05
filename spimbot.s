@@ -39,15 +39,25 @@ GET_MAP                  = 0xffff00f0
 GET_PUZZLE_CNT           = 0xffff2008
 GET_KERNEL_LOCATIONS     = 0xffff200c
 
+GET_MINIBOT_INFO         = 0xffff2014
+
 ### Bot global control
 moving:                 .word 0         # bot moving: 0 not moving, 1 moving
-bump_return_spots_lft:  .byte 3  3  5  5  7  8  12 12 12 14 15 13 19 10 7  19 7  24 9  28 16 28
-# (3 ,3 ),(5 ,5 ),(7 ,8 ),(12,12),(12,14),(15,13),(19,10),(7 ,19),(7 ,24),(9 ,28),(16,28)
-bump_return_spots_rgt:  .byte 36 36 34 34 32 31 27 27 27 25 24 26 20 29 32 20 32 15 30 11 23 11
-# (36,36),(34,34),(32,31),(27,27),(27,25),(24,26),(20,29),(32,20),(32,15),(30,11),(23,11)
-hot_spots_lft:          .byte 3 3 17 19 6 27
-hot_spots_rgt:
+# ul 11 elements 
+bump_return_spots_ul:   .byte 3  3  5  5  7  8  5  10 11 10 12 14 13 13 15 13 5 17 7  19 10 17
+# (3 ,3 ),(5 ,5 ),(7 ,8 ),(5 ,10),(11,10),(12,14),(13,13),(15,13),(5 ,17),(7 ,19),(10,17)
+# bl 4 elements 
+bump_return_spots_bl:   .byte 16 20 6  24 9  28 17 27
+# (16,20),(6 ,24),(9 ,28),(17,27)
+# ur 4 elements 
+bump_return_spots_ur:   .byte 23 19 33 17 30 11 22 12
+# (23,19),(33,17),(30,11),(22,12)
+# br 11 elements 
+bump_return_spots_br:   .byte 36 36 34 34 32 31 34 29 28 29 27 25 26 26 24 26 34 22 32 20 29 22
+# (36,36),(34,34),(32,31),(34,29),(28,29),(27,25),(26,26),(24,26),(34,22),(32,20),(29,22)
+last_moving_time:       .word 0
 move_to:                .byte -1 -1
+last_bump:              .byte -1 -1
 ### Bot global control
 
 ### Minibot control
@@ -125,7 +135,7 @@ main:
         li      $s0, 0                  # number of Puzzlecoins
     # Checking nearby kernels should not be performed more than once in 16000 cycles
         lw      $s1, TIMER($zero)       # last check time
-        lw      $s2, TIMER($zero)       # last move time
+        # s2
         li      $s3, 1                  # searching radius
         la      $t0, original_map
         sw      $t0, GET_MAP($zero)
@@ -151,9 +161,21 @@ main:
 infinite:
         la      $t0, has_puzzle
         lw      $t0, 0($t0)             # has_puzzle
-    # If have more than 4 puzzlecoins, stop solving
-        bge     $s0, 4, idling         
+    # If have more than 2 puzzlecoins, stop solving
+        blt     $s0, 2, temp_label   
+        # li      $t0, 1
+        # sw      $t0, SPAWN_MINIBOT($zero)
+        # sub     $s0, $s0, 2
+        # la      $t0, minibot_info
+        # sw      $t0, GET_MINIBOT_INFO($zero)
+        # add     $t0, $t0, 4
+        # lw      $t1, 0($t0)
+        # sw      $t1, SELECT_MINIBOT_BY_ID($zero)
+        # la      $t1, 1285
+        # sw      $t1, SET_TARGET_TILE($zero)
+        j       idling
     # If have puzzle currently, solve the puzzle
+temp_label:
         bne     $t0, $zero, have_puzzle 
 # Do not have puzzles to solve, switching to other tasks...
     # has_puzzle = 0  
@@ -171,19 +193,24 @@ idling:
         sb      $t1, 1($t0)             # move_to Y
         j       bot_moving
 no_specified_destination:
-no_enough_delay_since_bump:
 # Moving?
         la      $t0, moving
         lw      $t0, 0($t0)
         bne     $t0, $zero, bot_moving
 # Not moving
-        lw      $t0, TIMER($zero)       # current time
-        sub     $t1, $t0, $s2
-    # check if the bot has moved in last 120000 cycles
-        #blt     $t1, 120000, 
-        sub     $t1, $t0, $s1
-    # within 16000 cycles of another check, should not duplicate checking process
-        blt     $t1, 16000, no_checking        
+    # Is the time since last moving is more than 200000 cycles?
+        la      $t0, last_moving_time
+        lw      $t0, 0($t0)             # last moving time
+        lw      $t1, TIMER($zero)       # current time
+        sub     $t1, $t1, $t0
+        blt     $t1, 200000, not_enough_delay_since_bump
+    # has more than 200000 cycles that is not moving, try to move to the center of the map
+        li      $t0, 19
+        la      $t1, move_to
+        sb      $t0, 0($t1)
+        sb      $t0, 1($t1)
+        j       idling
+not_enough_delay_since_bump:
 # Checking Nearby Kernels
         la      $t9, kernel_locations   # &kernel_locations
         sw      $t9, GET_KERNEL_LOCATIONS($zero)
@@ -855,7 +882,7 @@ slow_solve_dominosa:
 
 .kdata
 chunkIH:                .word 2
-query_saving_space:     .word 6
+query_saving_space:     .word 7
 non_intrpt_str:         .asciiz "Non-interrupt exception\n"
 unhandled_str:          .asciiz "Unhandled interrupt type\n"
 .ktext 0x80000180
@@ -900,93 +927,62 @@ bonk_interrupt:
         sw      $s3, 12($v0)
         sw      $s4, 16($v0)
         sw      $s5, 20($v0)
-
-# Reflection on bumping into a wall
-#         lw      $v0, ANGLE($zero)       # get current angle
-#         lw      $s0, BOT_X($zero)       # current X
-#         lw      $s1, BOT_Y($zero)       # current Y
-#         rem     $s0, $s0, 8     # local X
-#         rem     $s1, $s1, 8     # local Y
-#         add     $s2, $s0, $s1   # x + y
-#         beq     $s2, 7, turn_around
-#         beq     $s0, $s1, turn_around
-#         slt     $s2, $s2, 8     # x + y < 7
-#         slt     $s3, $s0, $s1   # x < y
-#         xor     $s1, $s2, $s3 
-#         li      $s0, 180
-#         beq     $s1, $zero, vertical_barrier 
-#         li      $s0, 360
-# vertical_barrier:
-#         bge     $v0, $zero, non_negative_orientation 
-#         add     $v0, $v0, 360
-# non_negative_orientation:
-#         sub     $v0, $s0, $v0
-#         sw      $v0, ANGLE($zero)
-#         li      $a0, 1   
-#         sw      $a0, ANGLE_CONTROL($zero)       # absolute
-#         j       adjustment_end
-
-# turn_around:
-#         li      $v0, 180
-#         sw      $v0, ANGLE($zero)
-#         sw      $zero, ANGLE_CONTROL($zero)     # relative
-#         j       adjustment_end
-
-# adjustment_end:
-#         lw      $v0, TIMER($zero)
-#         add     $v0, $v0, 4000
-#         sw      $v0, TIMER($zero)       # register a timer interrupt
-#         li      $v0, 10
-#         sw      $v0, VELOCITY($zero)    # full speed
-#         la      $a0, moving
-#         li      $v0, 1
-#         sw      $v0, 0($a0)           # moving = 1
+        sw      $s6, 24($v0)
 
 query_start:
         lw      $s0, BOT_X($zero)
         div     $s0, $s0, 8     # current X
         lw      $s1, BOT_Y($zero)
         div     $s1, $s1, 8     # current Y
+        la      $v0, last_bump
+        lb      $s2, 0($v0)     # last bonk X
+        lb      $s3, 1($v0)     # last bonk Y
+        sb      $s0, 0($v0)     # renew last bonk X
+        sb      $s1, 1($v0)     # renew last bonk Y
+        seq     $s4, $s0, $s2
+        seq     $s5, $s0, $s2
+        and     $s4, $s4, $s5
+        beq     $s4, $zero, new_bonk_position
+# bonk on the same position as before
+        li      $s0, 19
+        la      $a0, move_to
+        sb      $s0, 0($a0)     # X destination
+        sb      $s0, 1($a0)     # Y destination
+        j       end_bonk_process
+new_bonk_position:
         li      $s4, 0          # nearest spot idx
         li      $s5, 10000      # nearest spot distance
         bgt     $s0, 19, rgt_query    
 # On the left side of the map (x <= 19)
 lft_query:
-        la      $a0, bump_return_spots_lft
-        li      $v0, 0
-lft_query_for:
-        bge     $v0, 9, lft_query_end_for
-        lbu     $s2, 0($a0)
-        lbu     $s3, 1($a0)
-        sub     $s2, $s2, $s0   # delta_x
-        mul     $s2, $s2, $s2   # delta_x ** 2
-        sub     $s3, $s3, $s1   # delta_y
-        mul     $s3, $s3, $s3   # delta_y ** 2
-        add     $s2, $s2, $s3   # delta_x ** 2 + delta_y ** 2
-        bge     $s2, $s5, lft_larger
-        move    $s4, $v0
-        move    $s5, $s2
-lft_larger:
-        add     $a0, $a0, 2
-        add     $v0, $v0, 1
-        j       lft_query_for
-lft_query_end_for:
-        mul     $s4, $s4, 2
-        la      $a0, bump_return_spots_lft     
-        add     $a0, $a0, $s4
-        lbu     $s0, 0($a0)
-        lbu     $s1, 1($a0)
-        la      $a0, move_to
-        sb      $s0, 0($a0)     # X destination
-        sb      $s1, 1($a0)     # Y destination
-        j       end_query
-
+        bgt     $s1, 19, bl_query
+# On the upper-left side of the map (x <= 19 && y <= 19)
+ul_query:
+        la      $a0, bump_return_spots_ul
+        li      $s6, 11         # search length = 11
+        j       start_query
+# On the bottom-left side of the map (x <= 19 && y > 19)
+bl_query:
+        la      $a0, bump_return_spots_bl
+        li      $s6, 4         # search length = 4
+        j       start_query
 # On the right side of the map (x > 19)
 rgt_query:
-        la      $a0, bump_return_spots_rgt
+        bgt     $s1, 19, br_query
+# On the upper-right side of the map (x > 19 && y <= 19)
+ur_query:
+        la      $a0, bump_return_spots_ur
+        li      $s6, 4         # search length = 4
+        j       start_query
+# On the bottom-right side of the map (x > 19 && y > 19)
+br_query:
+        la      $a0, bump_return_spots_br
+        li      $s6, 11         # search length = 11
+        
+start_query:
         li      $v0, 0
-rgt_query_for:
-        bge     $v0, 9, rgt_query_end_for
+query_for:
+        bge     $v0, $s6, query_end_for
         lbu     $s2, 0($a0)
         lbu     $s3, 1($a0)
         sub     $s2, $s2, $s0   # delta_x
@@ -994,24 +990,25 @@ rgt_query_for:
         sub     $s3, $s3, $s1   # delta_y
         mul     $s3, $s3, $s3   # delta_y ** 2
         add     $s2, $s2, $s3   # delta_x ** 2 + delta_y ** 2
-        bge     $s2, $s5, rgt_larger
-        move    $s4, $v0        
+        bge     $s2, $s5, larger
+        move    $s4, $v0
         move    $s5, $s2
-rgt_larger:
+larger:
         add     $a0, $a0, 2
         add     $v0, $v0, 1
-        j       rgt_query_for
-rgt_query_end_for:
-        mul     $s4, $s4, 2
-        la      $a0, bump_return_spots_rgt
-        add     $a0, $a0, $s4
+        j       query_for
+query_end_for:
+        nop
+        sub     $s4, $s6, $s4
+        sub     $a0, $a0, $s4
+        sub     $a0, $a0, $s4  
         lbu     $s0, 0($a0)
         lbu     $s1, 1($a0)
         la      $a0, move_to
         sb      $s0, 0($a0)     # X destination
         sb      $s1, 1($a0)     # Y destination
 
-end_query:
+end_bonk_process:
         la      $v0, query_saving_space # restore register values
         lw      $s0, 0($v0)
         lw      $s1, 4($v0)
@@ -1019,6 +1016,7 @@ end_query:
         lw      $s3, 12($v0)
         lw      $s4, 16($v0)
         lw      $s5, 20($v0)
+        lw      $s6, 24($v0)
         j       interrupt_dispatch      # see if other interrupts are waiting
 
 request_puzzle_interrupt:
@@ -1049,6 +1047,9 @@ timer_interrupt:
         sw      $sp, PICKUP($zero)      # Pickup kernels on current tile
         la      $a0, moving
         sw      $zero, 0($a0)           # moving = 0
+        la      $a0, last_moving_time
+        lw      $v0, TIMER($zero)       
+        sw      $v0, 0($a0)             # record last moving time
         j       interrupt_dispatch
 
 non_intrpt:                             # was some non-interrupt
