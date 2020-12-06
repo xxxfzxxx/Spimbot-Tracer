@@ -38,33 +38,40 @@ BUILD_SILO               = 0xffff2000
 GET_MAP                  = 0xffff00f0
 GET_PUZZLE_CNT           = 0xffff2008
 GET_KERNEL_LOCATIONS     = 0xffff200c
+GET_NUM_KERNELS          = 0xffff2010
 
 GET_MINIBOT_INFO         = 0xffff2014
 
 ### Bot global control
 moving:                 .word 0         # bot moving: 0 not moving, 1 moving
-# ul 11 elements 
-bump_return_spots_ul:   .byte 3  3  5  5  7  8  5  10 11 10 12 14 13 13 15 13 5 17 7  19 10 17
-# (3 ,3 ),(5 ,5 ),(7 ,8 ),(5 ,10),(11,10),(12,14),(13,13),(15,13),(5 ,17),(7 ,19),(10,17)
+# ul 12 elements 
+bump_return_spots_ul:   .byte 3  3  5  5  7  8  5  10 11 10 12 14 13 13 15 13 5 17 7  19 17 17 10 17
+# (3 ,3 ),(5 ,5 ),(7 ,8 ),(5 ,10),(11,10),(12,14),(13,13),(15,13),(5 ,17),(7 ,19),(17,17),(10,17)
 # bl 4 elements 
 bump_return_spots_bl:   .byte 16 20 6  24 9  28 17 27
 # (16,20),(6 ,24),(9 ,28),(17,27)
 # ur 4 elements 
 bump_return_spots_ur:   .byte 23 19 33 17 30 11 22 12
 # (23,19),(33,17),(30,11),(22,12)
-# br 11 elements 
-bump_return_spots_br:   .byte 36 36 34 34 32 31 34 29 28 29 27 25 26 26 24 26 34 22 32 20 29 22
-# (36,36),(34,34),(32,31),(34,29),(28,29),(27,25),(26,26),(24,26),(34,22),(32,20),(29,22)
+# br 12 elements 
+bump_return_spots_br:   .byte 36 36 34 34 32 31 34 29 28 29 27 25 26 26 24 26 34 22 32 20 22 22 29 22
+# (36,36),(34,34),(32,31),(34,29),(28,29),(27,25),(26,26),(24,26),(34,22),(32,20),(22,22),(29,22)
 last_moving_time:       .word 0
 move_to:                .byte -1 -1
 last_bump:              .byte -1 -1
+num_kernels:            .word 0 0
 ### Bot global control
 
 ### Minibot control
 silo_status:            .byte 0
-silo_position:          .byte 7 8
+silo_position:          .byte 7  19
+silo_position_two_byte: .word 0x1307
+silo_position_on_map:   .word 0
+select_region:          .word 0x06120814
 minibot_info:           .word 0
                         .word 0:12
+bot_estimate_move_time: .word 0:6
+current_checking_idx:   .word 0
 ### Minibot control
 
 ### Arctan
@@ -83,6 +90,7 @@ dist_multiplier:        .float 1000.0
 
 ### Puzzle
 GRIDSIZE = 8
+solve_flag:             .byte 1
 has_puzzle:             .word 0                         
 puzzle:                 .half 0:2000             
 heap:                   .half 0:2000
@@ -119,6 +127,84 @@ floor_indices:          .word 0:3200
 
 kernel_locations:       .word 0
                         .byte 0:1600
+
+left_map_coordinate:    .byte 0  0  1  0  2  0  3  0  4  0
+                        .byte 0  1  1  1  2  1  3  1  4  1
+                        .byte 0  2  1  2  2  2  3  2  4  2
+                        .byte 0  3  1  3  2  3  3  3  4  3  5  3
+                        .byte 0  4  1  4  2  4  3  4  4  4  5  4  6  4
+                        .byte 3  5  4  5  5  5  6  5  7  5  8  5  9  5  10 5  11 5  12 5  13 5
+                        .byte 4  6  5  6  6  6  7  6  8  6  9  6  10 6  11 6  12 6  13 6
+                        .byte 5  7  6  7  7  7  8  7  9  7  10 7  11 7  12 7  13 7
+                        .byte 6  8  7  8  8  8  9  8  10 8
+                        .byte 7  9  8  9  9  9  10 9  11 9
+                        .byte 8  10 9  10 10 10 11 10 12 10
+                        .byte 9  11 10 11 11 11 12 11 13 11
+                        .byte 10 12 11 12 12 12 13 12
+                        .byte 11 13 12 13 13 13
+                        .byte 12 14 13 14
+                        .byte 10 15 11 15 12 15 13 15
+                        .byte 8  16 9  16 10 16 11 16 12 16 13 16
+                        .byte 7  17 8  17 9  17 10 17 11 17 12 17 13 17
+                        .byte 7  18 8  18 9  18 10 18 11 18 12 18 13 18
+                        .byte 7  19 8  19 9  19 10 19 11 19 12 19 13 19
+                        .byte 7  20 8  20 9  20 10 20 11 20 12 20 13 20
+                        .byte 7  21 8  21 9  21 10 21 11 21 12 21 13 21
+                        .byte 7  22 8  22 9  22 10 22 11 22 12 22 13 22
+                        .byte 8  23 9  23 10 23 11 23 12 23 13 23
+                        .byte 10 24 11 24 12 24 13 24
+                        .byte 10 25 11 25 12 25 13 25
+                        .byte 10 26 11 26 12 26 13 26
+                        .byte 10 27 11 27 12 27 13 27
+                        .byte 10 28 11 28 12 28 13 28
+                        .byte 8  29 9  29 10 29 11 29 12 29 13 29
+                        .byte 6  30 7  30 8  30 9  30 10 30 11 30 12 30 13 30
+                        .byte 5  31 6  31 7  31 8  31 9  31 10 31 11 31 12 31 13 31
+                        .byte 5  32 6  32 7  32 8  32 9  32 10 32 11 32 12 32 13 32
+                        .byte 5  33 6  33 7  33 8  33 9  33 10 33 11 33 12 33 13 33
+                        .byte 5  34 6  34 7  34 8  34 9  34 10 34 11 34 12 34 13 34
+                        .byte 5  35 6  35 7  35 8  35 9  35 10 35 11 35 12 35 13 35
+                        .byte 6  36 7  36 8  36 9  36 10 36 11 36 12 36 13 36
+                        .byte 8  37 9  37 10 37 11 37 12 37 13 37
+                        .byte -1
+# (0 ,0 ),(1 ,0 ),(2 ,0 ),(3 ,0 ),(4 ,0 ),
+# (0 ,1 ),(1 ,1 ),(2 ,1 ),(3 ,1 ),(4 ,1 ),
+# (0 ,2 ),(1 ,2 ),(2 ,2 ),(3 ,2 ),(4 ,2 ),
+# (0 ,3 ),(1 ,3 ),(2 ,3 ),(3 ,3 ),(4 ,3 ),(5 ,3 ),
+# (0 ,4 ),(1 ,4 ),(2 ,4 ),(3 ,4 ),(4 ,4 ),(5 ,4 ),(6 ,4 ),
+# (3 ,5 ),(4 ,5 ),(5 ,5 ),(6 ,5 ),(7 ,5 ),(8 ,5 ),(9 ,5 ),(10,5 ),(11,5 ),(12,5 ),(13,5 ),
+# (4 ,6 ),(5 ,6 ),(6 ,6 ),(7 ,6 ),(8 ,6 ),(9 ,6 ),(10,6 ),(11,6 ),(12,6 ),(13,6 ),
+# (5 ,7 ),(6 ,7 ),(7 ,7 ),(8 ,7 ),(9 ,7 ),(10,7 ),(11,7 ),(12,7 ),(13,7 ),
+# (6 ,8 ),(7 ,8 ),(8 ,8 ),(9 ,8 ),(10,8 ),
+# (7 ,9 ),(8 ,9 ),(9 ,9 ),(10,9 ),(11,9 ),
+# (8 ,10),(9 ,10),(10,10),(11,10),(12,10),
+# (9 ,11),(10,11),(11,11),(12,11),(13,11),
+# (10,12),(11,12),(12,12),(13,12),
+# (11,13),(12,13),(13,13),
+# (12,14),(13,14),
+# (10,15),(11,15),(12,15),(13,15),
+# (8 ,16),(9 ,16),(10,16),(11,16),(12,16),(13,16),
+# (7 ,17),(8 ,17),(9 ,17),(10,17),(11,17),(12,17),(13,17),
+# (7 ,18),(8 ,18),(9 ,18),(10,18),(11,18),(12,18),(13,18),
+# (7 ,19),(8 ,19),(9 ,19),(10,19),(11,19),(12,19),(13,19),
+# (7 ,20),(8 ,20),(9 ,20),(10,20),(11,20),(12,20),(13,20),
+# (7 ,21),(8 ,21),(9 ,21),(10,21),(11,21),(12,21),(13,21),
+# (7 ,22),(8 ,22),(9 ,22),(10,22),(11,22),(12,22),(13,22),
+# (8 ,23),(9 ,23),(10,23),(11,23),(12,23),(13,23),
+# (10,24),(11,24),(12,24),(13,24),
+# (10,25),(11,25),(12,25),(13,25),
+# (10,26),(11,26),(12,26),(13,26),
+# (10,27),(11,27),(12,27),(13,27),
+# (10,28),(11,28),(12,28),(13,28),
+# (8 ,29),(9 ,29),(10,29),(11,29),(12,29),(13,29),
+# (6 ,30),(7 ,30),(8 ,30),(9 ,30),(10,30),(11,30),(12,30),(13,30),
+# (5 ,31),(6 ,31),(7 ,31),(8 ,31),(9 ,31),(10,31),(11,31),(12,31),(13,31),
+# (5 ,32),(6 ,32),(7 ,32),(8 ,32),(9 ,32),(10,32),(11,32),(12,32),(13,32),
+# (5 ,33),(6 ,33),(7 ,33),(8 ,33),(9 ,33),(10,33),(11,33),(12,33),(13,33),
+# (5 ,34),(6 ,34),(7 ,34),(8 ,34),(9 ,34),(10,34),(11,34),(12,34),(13,34),
+# (5 ,35),(6 ,35),(7 ,35),(8 ,35),(9 ,35),(10,35),(11,35),(12,35),(13,35),
+# (6 ,36),(7 ,36),(8 ,36),(9 ,36),(10,36),(11,36),(12,36),(13,36),
+# (8 ,37),(9 ,37),(10,37),(11,37),(12,37),(13,37)
 #### Maps
 
 .text
@@ -140,10 +226,22 @@ main:
         la      $t0, original_map
         sw      $t0, GET_MAP($zero)
 
+# Initialize silo_position_on_map
+        la      $t0, silo_position
+        lb      $t1, 0($t0)
+        lb      $t2, 1($t0)
+        mul     $t2, $t2, 40
+        add     $t1, $t1, $t2           # silo position offset
+        la      $t0, original_map
+        add     $t1, $t1, $t0           # silo position respective to map
+        la      $t0, silo_position_on_map
+        sw      $t1, 0($t0)
+
 # Request initial puzzle
         la      $t0, puzzle            
         sw      $t0, REQUEST_PUZZLE($zero)
 
+# Initial movement to center of the map
         li      $t0, 45
         sw      $t0, ANGLE($zero)
         li      $t0, 1                  # absolute
@@ -157,25 +255,42 @@ main:
         la      $t1, moving
         sw      $t0, 0($t1)             # moving = 1
 
-
 infinite:
+        la      $t0, solve_flag
+        lb      $t0, 0($t0)
+# Is solve_flag true?
+        bne     $t0, $zero, should_solve
+    # should not solve at this time
+        j       idling
+should_solve:
+# If have more than or equal to 2 puzzlecoins, stop solving and place a minibot
+        blt     $s0, 2, attempt_solve_puzzle 
+        la      $t0, num_kernels
+        sw      $t0, GET_NUM_KERNELS($zero)
+        lw      $t0, 0($t0)     # number of kernels currently have
+        blt     $t0, 2, idling 
+    # have more than or equal to 2 puzzlecoins  
+        li      $t0, 1
+        sw      $t0, SPAWN_MINIBOT($zero)
+        sub     $s0, $s0, 2
+        la      $t0, minibot_info
+        sw      $t0, GET_MINIBOT_INFO($zero)
+        lw      $t1, 0($t0)     # number of minibots currently have
+# Are there totoal 5 minibots?
+        blt     $t1, 5, minibot_not_enough
+        la      $t2, solve_flag
+        sb      $zero, 0($t2)
+minibot_not_enough:
+        sub     $a0, $t1, 1     # index (0-indexed)
+        la      $t0, silo_position
+        lb      $a1, 0($t0)     # target X
+        lb      $a2, 1($t0)     # target Y
+        jal     minibot_move_to_destination
+        j       idling
+attempt_solve_puzzle:
         la      $t0, has_puzzle
         lw      $t0, 0($t0)             # has_puzzle
-    # If have more than 2 puzzlecoins, stop solving
-        blt     $s0, 2, temp_label   
-        # li      $t0, 1
-        # sw      $t0, SPAWN_MINIBOT($zero)
-        # sub     $s0, $s0, 2
-        # la      $t0, minibot_info
-        # sw      $t0, GET_MINIBOT_INFO($zero)
-        # add     $t0, $t0, 4
-        # lw      $t1, 0($t0)
-        # sw      $t1, SELECT_MINIBOT_BY_ID($zero)
-        # la      $t1, 1285
-        # sw      $t1, SET_TARGET_TILE($zero)
-        j       idling
     # If have puzzle currently, solve the puzzle
-temp_label:
         bne     $t0, $zero, have_puzzle 
 # Do not have puzzles to solve, switching to other tasks...
     # has_puzzle = 0  
@@ -198,7 +313,7 @@ no_specified_destination:
         lw      $t0, 0($t0)
         bne     $t0, $zero, bot_moving
 # Not moving
-    # Is the time since last moving is more than 200000 cycles?
+# Is the time since last moving is more than 200000 cycles?
         la      $t0, last_moving_time
         lw      $t0, 0($t0)             # last moving time
         lw      $t1, TIMER($zero)       # current time
@@ -376,19 +491,116 @@ have_puzzle:
 # Puzzle solved, submitting...
         la      $t0, heap
         sw      $t0, SUBMIT_SOLUTION($zero)
-        add     $s0, $s0, 1     # number of puzzle solved + 1
+        add     $s0, $s0, 1     # puzzlecoins + 1
         la      $t0, puzzle     # request another puzzle
         sw      $t0, REQUEST_PUZZLE($zero)
         j       others
-# Within 16000 cycles of another ckeck
-no_checking:
 # Moving 
 bot_moving:
 # Other event
 others:
+        la      $t0, silo_status
+        lb      $t0, 0($t0)
+        bne     $t0, $zero, silo_already_built
+        la      $t0, minibot_info
+        sw      $t0, GET_MINIBOT_INFO($zero)
+        lw      $t1, 0($t0)     # number of minibots currently have
+# Are there totoal 3 minibots and the silo is not built yet?
+        blt     $t1, 3, silo_unable_to_be_built
+        la      $t2, original_map
+        sw      $t2, GET_MAP($zero)
+        la      $t2, silo_position_on_map
+        lw      $t2, 0($t2)
+        lbu     $t2, 0($t2)
+        beq     $t2, 2, silo_already_built
+        la      $t2, num_kernels        # check if there is enough kernels
+        sw      $t2, GET_NUM_KERNELS($zero)
+        lw      $t2, 0($t2)     # number of kernels currently have
+        blt     $t2, 10, silo_unable_to_be_built 
+    # there is no silo but the building condition is met, build a silo
+        la      $t2, select_region
+        lw      $t2, 0($t2)
+        sw      $t2, SELECT_MINIBOT_IN_REGION($zero)
+        la      $t2, silo_position_two_byte
+        lw      $t2, 0($t2)
+        sw      $t2, BUILD_SILO($zero)
+        la      $t2, original_map
+        sw      $t2, GET_MAP($zero)
+        la      $t2, silo_position_on_map
+        lw      $t2, 0($t2)
+        lbu     $t2, 0($t2)
+        bne     $t2, 2, silo_unable_to_be_built
+        la      $t0, silo_status
+        sb      $sp, 0($t0)
+silo_already_built:
+        la      $t0, current_checking_idx
+        lw      $t0, 0($t0)
+        mul     $t1, $t0, 2
+        la      $t2, left_map_coordinate
+        add     $t1, $t1, $t2   # current checking pointer
+        la      $t2, minibot_info
+        sw      $t2, GET_MINIBOT_INFO($zero)
+        lw      $t3, 0($t2)     # number of bots potentially waiting
+        add     $t2, $t2, 4     # pointer to the first minibot struct
+        la      $t4, bot_estimate_move_time     # pointer to the first minibot estimated moving time
+        la      $t5, kernel_locations           # kernel map
+        sw      $t5, GET_KERNEL_LOCATIONS($zero)
+bot_checking_start: 
+        lb      $a1, 0($t1)     # current checking X
+        blt     $a1, $zero, checking_end
+        lb      $a2, 1($t1)     # current checking Y
+        mul     $t6, $a2, 40
+        add     $t6, $t6, $a1
+        add     $t6, $t6, $t5   # pointer to current checking tile
+        lw      $t6, 0($t6)     # current kernel number on this tile
+        beq     $t6, $zero, check_next_tile
+    # loop through bots to find a suitable bot
+        li      $v0, 0
+        # bge     $v0, $t3
+check_next_tile:
+checking_end:
+silo_unable_to_be_built:
+
         j       infinite        # Don't remove this! If this is removed, then your code will not be graded!!!
 
         
+#------------------------------------------------------------------------------
+# minibot_move_to_destination
+# $a0 - the index of the minibot (0-indexed)
+# $a1 - destination X
+# $a2 - destination Y
+# time delay = (delta_x + delta_y) * 10000
+minibot_move_to_destination:
+        la      $a3, minibot_info
+        sw      $a3, GET_MINIBOT_INFO($zero)
+        add     $a3, $a3, 4     # pointer to the first minibot struct
+        mul     $v0, $a0, 8     # offset in minibot array
+        add     $a3, $a3, $v0   # pointer to current minibot struct
+        lb      $v0, 5($a3)
+        sub     $v0, $a1, $v0
+        bgt     $v0, $zero, first_argument_vaild 
+        sub     $v0, $zero, $v0
+first_argument_vaild:
+        lb      $v1, 6($a3)
+        sub     $v1, $a2, $v1
+        bgt     $v1, $zero, second_argument_vaild 
+        sub     $v1, $zero, $v1
+second_argument_vaild:
+        add     $v1, $v1, $v0   # delta_x + delta_y
+        mul     $v1, $v1, 10000
+        lw      $a3, 0($a3)     # ID of the minibot
+        sw      $a3, SELECT_MINIBOT_BY_ID($zero)
+        sll     $a2, $a2, 8
+        or      $a2, $a2, $a1
+        sw      $a2, SET_TARGET_TILE($zero)
+        mul     $a2, $a0, 4
+        la      $a3, bot_estimate_move_time
+        add     $a3, $a3, $a2
+        lw      $a2, TIMER($zero)
+        add     $a2, $a2, $v1
+        sw      $a2, 0($a3)
+        jr      $ra
+# minibot_move_to_destination END
 #------------------------------------------------------------------------------
 # move_to_destination - move the bot to destination
 # $a0 - target x
@@ -944,11 +1156,11 @@ query_start:
         and     $s4, $s4, $s5
         beq     $s4, $zero, new_bonk_position
 # bonk on the same position as before
-        li      $s0, 19
-        la      $a0, move_to
-        sb      $s0, 0($a0)     # X destination
-        sb      $s0, 1($a0)     # Y destination
-        j       end_bonk_process
+        # li      $s0, 19
+        # la      $a0, move_to
+        # sb      $s0, 0($a0)     # X destination
+        # sb      $s0, 1($a0)     # Y destination
+        # j       end_bonk_process
 new_bonk_position:
         li      $s4, 0          # nearest spot idx
         li      $s5, 10000      # nearest spot distance
@@ -959,7 +1171,7 @@ lft_query:
 # On the upper-left side of the map (x <= 19 && y <= 19)
 ul_query:
         la      $a0, bump_return_spots_ul
-        li      $s6, 11         # search length = 11
+        li      $s6, 12         # search length = 12
         j       start_query
 # On the bottom-left side of the map (x <= 19 && y > 19)
 bl_query:
@@ -977,7 +1189,7 @@ ur_query:
 # On the bottom-right side of the map (x > 19 && y > 19)
 br_query:
         la      $a0, bump_return_spots_br
-        li      $s6, 11         # search length = 11
+        li      $s6, 12         # search length = 12
         
 start_query:
         li      $v0, 0
