@@ -124,10 +124,8 @@ max_dot_8:              .byte 1  2  3  4  5  6  7  8
 #### Maps
 original_map:           .byte 0:1600
 floor_indices:          .word 0:3200 
-
 kernel_locations:       .word 0
                         .byte 0:1600
-
 left_map_coordinate:    .byte 0  0  1  0  2  0  3  0  4  0
                         .byte 0  1  1  1  2  1  3  1  4  1
                         .byte 0  2  1  2  2  2  3  2  4  2
@@ -541,23 +539,55 @@ silo_already_built:
         la      $t2, minibot_info
         sw      $t2, GET_MINIBOT_INFO($zero)
         lw      $t3, 0($t2)     # number of bots potentially waiting
+#         bge     $t3, 3, no_need_for_suppliment
+#     # has less than 3 bots, switch the solve_flag to true
+#         la      $t4, solve_flag
+#         li      $t5, 1
+#         sb      $t5, 0($t4)
+# no_need_for_suppliment:
         add     $t2, $t2, 4     # pointer to the first minibot struct
         la      $t4, bot_estimate_move_time     # pointer to the first minibot estimated moving time
         la      $t5, kernel_locations           # kernel map
         sw      $t5, GET_KERNEL_LOCATIONS($zero)
+        add     $t5, $t5, 4
 bot_checking_start: 
         lb      $a1, 0($t1)     # current checking X
-        blt     $a1, $zero, checking_end
+        blt     $a1, $zero, checking_restart
         lb      $a2, 1($t1)     # current checking Y
         mul     $t6, $a2, 40
         add     $t6, $t6, $a1
         add     $t6, $t6, $t5   # pointer to current checking tile
-        lw      $t6, 0($t6)     # current kernel number on this tile
+        lb      $t6, 0($t6)     # current kernel number on this tile
         beq     $t6, $zero, check_next_tile
-    # loop through bots to find a suitable bot
-        li      $v0, 0
-        # bge     $v0, $t3
+    # has kernel on current tile, loop through bots to find a suitable bot
+        li      $a0, 0
+not_searching_loop:
+        bge     $a0, $t3, no_bot_availble
+        mul     $t7, $t0, 4
+        add     $t7, $t7, $t4
+        lw      $t7, 0($t7)
+        lw      $t8, TIMER($zero)
+        sub     $t7, $t8, $t7   # current time - estimated moving time
+        blt     $t7, $zero, time_not_enough 
+        jal     minibot_move_to_destination
+        add     $t0, $t0, 1
+        add     $t1, $t1, 2
+        j       bot_checking_start
+time_not_enough:
+        add     $a0, $a0, 1
+        j       not_searching_loop
+no_bot_availble:
+        la      $a3, current_checking_idx
+        add     $t0, $t0, 1
+        sw      $t0, 0($a3)
+        j       checking_end
 check_next_tile:
+        add     $t0, $t0, 1
+        add     $t1, $t1, 2
+        j       bot_checking_start
+checking_restart:
+        la      $t0, current_checking_idx
+        sw      $zero, 0($t0)
 checking_end:
 silo_unable_to_be_built:
 
@@ -573,6 +603,7 @@ silo_unable_to_be_built:
 minibot_move_to_destination:
         la      $a3, minibot_info
         sw      $a3, GET_MINIBOT_INFO($zero)
+        lw      $v0, 0($a3)     # ONLY FOR CHECKING
         add     $a3, $a3, 4     # pointer to the first minibot struct
         mul     $v0, $a0, 8     # offset in minibot array
         add     $a3, $a3, $v0   # pointer to current minibot struct
